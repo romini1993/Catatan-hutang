@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Catatan Hutang</title>
+    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#090a10">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Hutang">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/128/10369/10369894.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <style>
+        :root {
+            --bg: #08090b;
+            --card: #131420;
+            --card-soft: #0d0e17;
+            --line: #232640;
+            --accent: #6d6af0;
+            --accent-hover: #817ef7;
+            --accent-soft: rgba(109, 106, 240, 0.14);
+            --warn: #f59e0b;
+            --warn-soft: rgba(245, 158, 11, 0.12);
+            --ok: #34d399;
+            --muted: #8890a3;
+        }
+        html, body { width: 100%; min-height: 100vh; margin: 0; background: var(--bg); color: #eef0f5; font-family: 'Inter', sans-serif; }
+        .font-display { font-family: 'Space Grotesk', sans-serif; }
+        .num { font-family: 'Space Grotesk', sans-serif; font-variant-numeric: tabular-nums; }
+        .porto-card { background: var(--card); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); transition: border-color .2s ease, box-shadow .2s ease; }
+        .porto-input { background: var(--card-soft); border: 1px solid var(--line); color: #f4f5f9; transition: border-color .15s ease, box-shadow .15s ease; }
+        .porto-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+        @keyframes riseIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .rise-in { animation: riseIn .35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+        .text-accent { color: var(--accent); }
+        .btn-primary { background: var(--accent); box-shadow: 0 10px 25px rgba(109,106,240,0.28); transition: background .18s ease, transform .12s ease; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary:active { transform: scale(0.98); }
+
+        /* --- Expand/collapse group (fade + slide) --- */
+        .group-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(0.16, 1, 0.3, 1); }
+        .group-body.open { grid-template-rows: 1fr; }
+        .group-body > div { overflow: hidden; }
+        .group-body .inner-fade { opacity: 0; transform: translateY(-4px); transition: opacity .25s ease .05s, transform .25s ease .05s; }
+        .group-body.open .inner-fade { opacity: 1; transform: translateY(0); }
+        .chev { transition: transform .3s cubic-bezier(0.16, 1, 0.3, 1); display: inline-block; }
+        .chev.open { transform: rotate(180deg); }
+        .group-header:hover { background: rgba(255,255,255,0.03); }
+        .group-card { transition: border-color .2s ease, box-shadow .2s ease; }
+        .group-card:hover { border-color: #2c2f4d; }
+        .history-row { transition: border-color .2s ease, transform .15s ease; }
+        .history-row:hover { transform: translateY(-1px); }
+
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+
+        #toast {
+            position: fixed; top: 20%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.85);
+            transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.25s ease;
+            opacity: 0; z-index: 9999; pointer-events: none;
+        }
+        #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        #errorBanner { display: none; }
+        #errorBanner.show { display: flex; }
+
+        /* --- Tahan lama pada baris untuk hapus --- */
+        .hold-target { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+        .hold-target::after { content: ''; position: absolute; inset: 0; background: rgba(245,158,11,0.16); transform: scaleX(0); transform-origin: left; transition: transform .25s ease; pointer-events: none; }
+        .hold-target.holding::after { transform: scaleX(1); transition: transform var(--hold-ms, 700ms) linear; }
+        .btn-warn-solid { background: var(--warn); transition: background .18s ease, transform .12s ease; }
+        .btn-warn-solid:hover { background: #fbbf24; }
+        .btn-warn-solid:active { transform: scale(0.98); }
+
+        /* --- Modal: fade + scale --- */
+        #deleteModal { opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+        #deleteModal.show { opacity: 1; pointer-events: auto; }
+        #deleteModal .modal-card { transform: scale(0.94) translateY(10px); opacity: 0; transition: transform .3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity .2s ease; }
+        #deleteModal.show .modal-card { transform: scale(1) translateY(0); opacity: 1; }
+
+        #groupedListContainer { transition: opacity .15s ease; }
+    </style>
+</head>
+<body class="p-3 md:p-6 flex justify-center pb-20">
+    <div class="w-full max-w-[1440px] grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+        <!-- KOLOM KIRI: Header & Form -->
+        <div class="lg:col-span-4 space-y-4 lg:sticky lg:top-6">
+            <div class="porto-card px-5 py-4 rounded-2xl flex items-center gap-3">
+                <div class="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-lg" style="background: var(--accent-soft); color: var(--accent);">💸</div>
+                <div class="min-w-0">
+                    <h1 class="font-display text-[15px] font-semibold text-white leading-tight truncate">Catatan Hutang</h1>
+                    <p class="text-[11px] mt-0.5" style="color: var(--muted);">Pinjaman &amp; cicilan, tersinkron ke Sheet</p>
+                </div>
+            </div>
+
+            <div id="errorBanner" class="items-start gap-2.5 px-4 py-3 rounded-xl text-xs" style="background: var(--warn-soft); border: 1px solid rgba(245,158,11,0.35); color: #fcd34d;">
+                <span class="mt-px">⚠️</span>
+                <div class="flex-1">
+                    <div id="errorBannerText" class="font-medium leading-snug">Gagal menyambung ke server.</div>
+                    <button onclick="loadData()" class="mt-1.5 text-[11px] font-semibold underline underline-offset-2 hover:text-white">Coba lagi</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="porto-card p-4 rounded-2xl flex items-center gap-3">
+                    <div class="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-sm" style="background: var(--accent-soft); color: var(--accent);">Rp</div>
+                    <div class="min-w-0">
+                        <div class="text-[11px] leading-none mb-1.5" style="color: var(--muted);">Hutang aktif</div>
+                        <div id="statTotalHutang" class="num text-[15px] font-semibold leading-none truncate" style="color: var(--accent);">Rp 0</div>
+                    </div>
+                </div>
+                <div class="porto-card p-4 rounded-2xl flex items-center gap-3">
+                    <div class="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-sm bg-white/5 text-slate-300">#</div>
+                    <div class="min-w-0">
+                        <div class="text-[11px] leading-none mb-1.5" style="color: var(--muted);">Transaksi</div>
+                        <div id="statCount" class="num text-[15px] font-semibold leading-none text-slate-200">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <form id="hutangForm" onsubmit="handleSubmit(event)" class="porto-card p-4 rounded-2xl space-y-2.5" autocomplete="off">
+                <h2 class="text-[13px] font-semibold mb-1" style="color: var(--accent);">Input pinjaman / cicilan</h2>
+                <div>
+                    <input type="text" id="tanggal" aria-label="Tanggal" required class="w-full porto-input rounded-xl px-3.5 py-2.5" autocomplete="off">
+                </div>
+                <div>
+                    <input type="text" id="peminjam" aria-label="Peminjam" required placeholder="Peminjam" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" oninput="handlePeminjamInput(this)" class="w-full porto-input rounded-xl px-3.5 py-2.5 font-medium">
+                </div>
+                <div>
+                    <div class="relative w-full">
+                        <div id="ghostVia" class="absolute inset-0 px-3.5 py-2.5 pointer-events-none text-slate-500 font-medium whitespace-pre overflow-hidden"></div>
+                        <input type="text" id="via" aria-label="Via / Pembayaran" required placeholder="QRIS, Seabank, Dana, BCA, Cash" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" oninput="handleViaInput(this)" onkeydown="handleViaKeyDown(event, this)" onblur="acceptViaSuggestion(this)" class="w-full porto-input rounded-xl px-3.5 py-2.5 relative bg-transparent z-10">
+                    </div>
+                </div>
+                <div>
+                    <input type="text" id="nominal" aria-label="Nominal" inputmode="decimal" required placeholder="Nominal" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" oninput="formatInputRibuan(this)" class="w-full porto-input rounded-xl px-3.5 py-2.5 num">
+                </div>
+                <button type="submit" id="submitBtn" class="w-full btn-primary text-white font-semibold py-3 rounded-xl">
+                    Simpan Catatan
+                </button>
+            </form>
+        </div>
+
+        <!-- KOLOM KANAN: Daftar Grouping & Tabs -->
+        <div class="lg:col-span-8 space-y-4 lg:sticky lg:top-6">
+            <div class="porto-card p-5 rounded-2xl space-y-4 min-h-[500px]">
+
+                <div class="flex p-1 rounded-xl border relative" style="background: var(--card-soft); border-color: var(--line);">
+                    <button onclick="switchTab('aktif')" id="tabAktif" class="flex-1 py-2 text-sm font-semibold rounded-lg transition-all z-10" style="color: var(--accent); background: var(--card); box-shadow: 0 4px 12px rgba(0,0,0,0.25);">Hutang aktif</button>
+                    <button onclick="switchTab('riwayat')" id="tabRiwayat" class="flex-1 py-2 text-sm font-semibold rounded-lg transition-all z-10 text-slate-500 hover:text-slate-300">Riwayat</button>
+                </div>
+
+                <div class="flex justify-between items-center px-1 mb-1 gap-3">
+                    <h2 id="listHeaderTitle" class="text-[13px] font-semibold truncate" style="color: var(--accent);">Daftar hutang aktif</h2>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <div id="loading" class="text-[11px] font-medium text-amber-400 hidden animate-pulse">Memuat…</div>
+                        <div id="sortContainer" class="flex items-center">
+                            <select id="sortAktif" onchange="renderData()" class="text-[11px] text-slate-300 border rounded-lg px-2.5 py-1.5 outline-none font-medium cursor-pointer" style="background: var(--card-soft); border-color: var(--line);">
+                                <option value="terbaru">⏳ Terbaru</option>
+                                <option value="terbesar">💰 Terbesar</option>
+                                <option value="nama">🔤 Nama (A-Z)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="groupedListContainer" class="space-y-3 max-h-[calc(100vh-220px)] overflow-y-auto pr-1 custom-scroll">
+                    <!-- List dirender lewat JavaScript -->
+                </div>
+                <p class="text-[11px] text-center" style="color: var(--muted);">Tahan lama pada nama atau transaksi untuk menghapus</p>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- POPUP MODAL HAPUS -->
+    <div id="deleteModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="modal-card porto-card w-full max-w-sm p-6 rounded-2xl border space-y-4 text-center relative" style="border-color: rgba(245,158,11,0.3);">
+            <div class="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold mx-auto" style="background: var(--warn-soft); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24;">⚠️</div>
+            <div>
+                <h3 class="font-display font-bold text-white text-base mb-1">Hapus / Lunas Pinjaman</h3>
+                <p id="deleteModalText" class="text-xs text-slate-400">Yakin mau hapus catatan pinjaman ini?</p>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="button" onclick="closeDeleteModal()" class="w-1/2 bg-[#1e2235] hover:bg-[#282d47] text-slate-300 font-semibold py-2.5 rounded-xl text-xs transition">Batal (Esc)</button>
+                <button type="button" id="confirmDeleteBtn" class="w-1/2 btn-warn-solid text-white font-semibold py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2" style="--tw-ring-color: rgba(245,158,11,0.5);">Ya, Hapus (Enter)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="px-5 py-3 rounded-2xl text-xs font-semibold shadow-2xl backdrop-blur-md border flex items-center gap-2">
+        <span id="toastIcon"></span>
+        <span id="toastText"></span>
+    </div>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbxGZZdwz313rSsFpHQrQcsoXYzhgVcgWffx_WIq-to77DDenZ16vHnBXnXp3wFgdTF4BA/exec";
+        const LOCAL_STORAGE_KEY = "hutang_cached_data";
+        const VIA_OPTIONS = ["Seabank", "Dana", "BCA", "Cash", "GoPay", "QRIS", "OVO", "Mandiri", "BRI", "ShopeePay"];
+
+        let globalData = [];
+        let activeTab = 'aktif'; 
+        let currentSuggestion = "";
+        let toastTimeout = null;
+        let expandedGroups = new Set();
+        let deleteTargetNo = null;
+        let deleteTargetPerson = null;
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Registration failed: ', err));
+            });
+        }
+
+        flatpickr("#tanggal", { dateFormat: "d/m/Y", defaultDate: "today" });
+
+        window.onload = function() {
+            const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (cached) {
+                try {
+                    globalData = JSON.parse(cached);
+                    renderData();
+                } catch(e) {}
+            }
+            loadData();
+        };
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const text = document.getElementById('toastText');
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            text.innerText = message;
+
+            if (type === 'success') {
+                icon.innerText = '✓';
+                toast.className = "px-5 py-3 rounded-2xl text-xs font-semibold shadow-2xl backdrop-blur-md border flex items-center gap-2 bg-emerald-500/20 border-emerald-500/40 text-emerald-300 show";
+                toast.style.background = "";
+                toast.style.borderColor = "";
+                toast.style.color = "";
+            } else if (type === 'info') {
+                icon.innerText = 'ℹ';
+                toast.className = "px-5 py-3 rounded-2xl text-xs font-semibold shadow-2xl backdrop-blur-md border flex items-center gap-2 show";
+                toast.style.background = "rgba(109,106,240,0.18)";
+                toast.style.borderColor = "rgba(109,106,240,0.45)";
+                toast.style.color = "#c7c6ff";
+            } else {
+                icon.innerText = '✕';
+                toast.className = "px-5 py-3 rounded-2xl text-xs font-semibold shadow-2xl backdrop-blur-md border flex items-center gap-2 show";
+                toast.style.background = "rgba(245,158,11,0.15)";
+                toast.style.borderColor = "rgba(245,158,11,0.4)";
+                toast.style.color = "#fcd34d";
+            }
+            toastTimeout = setTimeout(() => toast.classList.remove('show'), 1800);
+        }
+
+        function handlePeminjamInput(input) { input.value = input.value.toUpperCase(); }
+        function capitalizeWords(str) { return str.replace(/\b\w/g, l => l.toUpperCase()); }
+
+        function handleViaInput(input) {
+            let val = input.value;
+            const ghost = document.getElementById('ghostVia');
+            currentSuggestion = "";
+
+            if (val.trim() !== "") {
+                val = capitalizeWords(val);
+                input.value = val;
+                const match = VIA_OPTIONS.find(opt => opt.toLowerCase().startsWith(val.toLowerCase()));
+                if (match) {
+                    currentSuggestion = match;
+                    const typedPart = val;
+                    const ghostPart = match.slice(typedPart.length);
+                    ghost.innerHTML = `<span class="opacity-0">${typedPart}</span><span>${ghostPart}</span>`;
+                    return;
+                }
+            }
+            ghost.innerHTML = "";
+        }
+
+        function handleViaKeyDown(e, input) {
+            if ((e.key === 'Tab' || e.key === 'Enter' || e.key === 'ArrowRight') && currentSuggestion) {
+                if (input.value.toLowerCase() !== currentSuggestion.toLowerCase()) {
+                    e.preventDefault();
+                    input.value = currentSuggestion;
+                    document.getElementById('ghostVia').innerHTML = "";
+                    currentSuggestion = "";
+                }
+            }
+        }
+
+        function acceptViaSuggestion(input) {
+            if (currentSuggestion && input.value.trim() !== "") {
+                input.value = currentSuggestion;
+            } else if (input.value.trim() !== "") {
+                input.value = capitalizeWords(input.value);
+            }
+            document.getElementById('ghostVia').innerHTML = "";
+            currentSuggestion = "";
+        }
+
+        function formatInputRibuan(input) {
+            let isNegative = input.value.trim().startsWith('-');
+            let value = input.value.replace(/\D/g, '');
+            if (value) {
+                let formatted = new Intl.NumberFormat('id-ID').format(value);
+                input.value = isNegative ? '-' + formatted : formatted;
+            } else {
+                input.value = isNegative ? '-' : '';
+            }
+        }
+
+        function formatRupiah(val) {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
+        }
+
+        function parseTanggalCustom(tglStr) {
+            if (!tglStr) return 0;
+            let parts = tglStr.split('/');
+            if (parts.length === 3) {
+                return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+            }
+            return new Date(tglStr).getTime() || 0;
+        }
+
+        function cleanTanggal(tglStr) {
+            if (!tglStr) return '-';
+            if (typeof tglStr === 'string' && tglStr.includes('T')) {
+                const d = new Date(tglStr);
+                if (!isNaN(d.getTime())) {
+                    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                }
+            }
+            return tglStr;
+        }
+
+        function showErrorBanner(message) {
+            const banner = document.getElementById('errorBanner');
+            document.getElementById('errorBannerText').innerText = message;
+            banner.classList.add('show');
+        }
+
+        function hideErrorBanner() {
+            document.getElementById('errorBanner').classList.remove('show');
+        }
+
+        function loadData() {
+            const loadingEl = document.getElementById('loading');
+            if (globalData.length === 0) {
+                loadingEl.classList.remove('hidden');
+                loadingEl.innerText = "Memuat…";
+            }
+            fetch(API_URL + "?action=read")
+                .then(res => {
+                    if (!res.ok) throw new Error(`Server balas status ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    loadingEl.classList.add('hidden');
+                    if (!Array.isArray(data)) {
+                        throw new Error((data && data.message) || "Format data dari server tidak sesuai");
+                    }
+                    globalData = data;
+                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+                    hideErrorBanner();
+                    renderData();
+                })
+                .catch(err => {
+                    console.error("Gagal load:", err);
+                    loadingEl.classList.add('hidden');
+                    const isNotFound = String(err.message || "").includes("404");
+                    showErrorBanner(
+                        isNotFound
+                            ? "URL Apps Script tidak ditemukan (404). Deployment web app-nya kemungkinan sudah tidak aktif — deploy ulang dan perbarui API_URL."
+                            : `Gagal mengambil data terbaru: ${err.message}. Menampilkan data tersimpan di perangkat ini.`
+                    );
+                    renderData();
+                });
+        }
+
+        function switchTab(tab) {
+            const container = document.getElementById('groupedListContainer');
+            container.style.opacity = '0';
+
+            setTimeout(() => {
+                activeTab = tab;
+                const btnAktif = document.getElementById('tabAktif');
+                const btnRiwayat = document.getElementById('tabRiwayat');
+                const headerTitle = document.getElementById('listHeaderTitle');
+                const sortElement = document.getElementById('sortContainer');
+
+                if(tab === 'aktif') {
+                    btnAktif.className = "flex-1 py-2 text-sm font-semibold rounded-lg transition-all z-10";
+                    btnAktif.style.cssText = "color: var(--accent); background: var(--card); box-shadow: 0 4px 12px rgba(0,0,0,0.25);";
+                    btnRiwayat.className = "flex-1 py-2 text-sm font-semibold rounded-lg transition-all z-10 text-slate-500 hover:text-slate-300";
+                    btnRiwayat.style.cssText = "";
+                    headerTitle.innerText = "Daftar hutang aktif";
+                    headerTitle.style.color = "var(--accent)";
+                    sortElement.classList.remove('hidden');
+                } else {
+                    btnRiwayat.className = "flex-1 py-2 text-sm font-semibold rounded-lg transition-all z-10";
+                    btnRiwayat.style.cssText = "color: #fbbf24; background: var(--card); box-shadow: 0 4px 12px rgba(0,0,0,0.25);";
+                    btnAktif.className = "flex-1 py-2 text-sm font-semibold rounded-lg transition-all z-10 text-slate-500 hover:text-slate-300";
+                    btnAktif.style.cssText = "";
+                    headerTitle.innerText = "Semua riwayat transaksi";
+                    headerTitle.style.color = "#fbbf24";
+                    sortElement.classList.add('hidden');
+                }
+                renderData();
+                requestAnimationFrame(() => { container.style.opacity = '1'; });
+            }, 140);
+        }
+
+        function renderData() {
+            const container = document.getElementById('groupedListContainer');
+            container.innerHTML = '';
+            
+            let totalAkumulasiAktif = 0;
+            document.getElementById('statCount').innerText = globalData.length;
+
+            if (activeTab === 'aktif') {
+                let rekapPeminjam = {};
+
+                globalData.forEach(item => {
+                    const nama = (item.peminjam || 'TANPA NAMA').toUpperCase().trim();
+                    const nom = parseFloat(item.nominal || 0);
+
+                    if (!rekapPeminjam[nama]) {
+                        rekapPeminjam[nama] = { total: 0, items: [] };
+                    }
+                    rekapPeminjam[nama].total += nom;
+                    rekapPeminjam[nama].items.push(item);
+                });
+
+                let groupKeys = Object.keys(rekapPeminjam).filter(nama => {
+                    const total = rekapPeminjam[nama].total;
+                    if (total > 0) totalAkumulasiAktif += total;
+                    return total > 0;
+                });
+
+                document.getElementById('statTotalHutang').innerText = formatRupiah(totalAkumulasiAktif);
+
+                if (groupKeys.length === 0) {
+                    container.innerHTML = `<div class="text-center text-xs py-14" style="color: var(--muted);"><div class="text-2xl mb-2">🗒️</div>Belum ada catatan hutang aktif.</div>`;
+                    return;
+                }
+
+                let sortMode = document.getElementById('sortAktif').value;
+                
+                groupKeys.sort((a, b) => {
+                    if (sortMode === 'terbesar') {
+                        return rekapPeminjam[b].total - rekapPeminjam[a].total;
+                    } else if (sortMode === 'nama') {
+                        return a.localeCompare(b);
+                    } else {
+                        let lastDateA = Math.max(...rekapPeminjam[a].items.map(i => parseTanggalCustom(i.tanggal)));
+                        let lastDateB = Math.max(...rekapPeminjam[b].items.map(i => parseTanggalCustom(i.tanggal)));
+                        if (lastDateA === lastDateB) {
+                            let noA = Math.max(...rekapPeminjam[a].items.map(i => i.no));
+                            let noB = Math.max(...rekapPeminjam[b].items.map(i => i.no));
+                            return noB - noA;
+                        }
+                        return lastDateB - lastDateA;
+                    }
+                });
+
+                let htmlString = '';
+                groupKeys.forEach(nama => {
+                    const data = rekapPeminjam[nama];
+                    const isLunas = data.total <= 0;
+                    const key = safeId(nama);
+                    const isOpen = expandedGroups.has(nama);
+
+                    data.items.sort((a,b) => b.no - a.no);
+
+                    htmlString += `
+                    <div class="group-card rise-in bg-[#131420] border border-[#232640] rounded-2xl mb-3 overflow-hidden">
+                        <button type="button" onclick="toggleGroup('${nama.replace(/'/g, "\\'")}')" data-type="person" data-name="${encodeURIComponent(nama)}" class="group-header hold-target w-full flex justify-between items-center p-4 cursor-pointer outline-none text-left">
+                            <div class="flex flex-col min-w-0">
+                                <span class="font-bold text-slate-200 text-sm truncate">${nama}</span>
+                                <span class="text-[10px] text-slate-500">${data.items.length} transaksi</span>
+                            </div>
+                            <div class="flex items-center gap-3 shrink-0">
+                                <span class="font-display font-bold num text-sm ${isLunas ? 'text-emerald-400' : 'text-accent'}">
+                                    ${formatRupiah(data.total)}
+                                </span>
+                                <span id="chev-${key}" class="chev ${isOpen ? 'open' : ''} text-slate-500 text-xs">▼</span>
+                            </div>
+                        </button>
+
+                        <div id="body-${key}" class="group-body ${isOpen ? 'open' : ''}">
+                            <div>
+                                <div class="inner-fade px-4 pb-4 pt-2 border-t border-[#232640]/60 bg-[#0d0e17]">
+                                    ${data.items.map(item => `
+                                        <div data-type="item" data-no="${item.no}" data-label="${encodeURIComponent(item.peminjam || '')}" data-amount="${formatRupiah(item.nominal)}" class="hold-target flex justify-between items-center py-2.5 border-b border-[#232640]/40 last:border-0">
+                                            <div class="flex flex-col">
+                                                <span class="text-[11px] text-slate-400">#${item.no} •${cleanTanggal(item.tanggal)}</span>
+                                                <span class="text-xs text-slate-200 font-medium">${item.via || '-'}</span>
+                                            </div>
+                                            <div class="flex items-center gap-4">
+                                                <span class="text-xs font-bold num ${item.nominal < 0 ? 'text-emerald-400' : 'text-accent'}">
+                                                    ${formatRupiah(item.nominal)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                container.innerHTML = htmlString;
+
+            } else {
+                globalData.forEach(item => { totalAkumulasiAktif += parseFloat(item.nominal || 0); });
+                document.getElementById('statTotalHutang').innerText = formatRupiah(totalAkumulasiAktif);
+
+                let historyData = [...globalData].sort((a, b) => {
+                    let timeA = parseTanggalCustom(a.tanggal);
+                    let timeB = parseTanggalCustom(b.tanggal);
+                    if (timeB === timeA) return b.no - a.no;
+                    return timeB - timeA;
+                });
+
+                if (historyData.length === 0) {
+                    container.innerHTML = `<div class="text-center text-xs py-14" style="color: var(--muted);"><div class="text-2xl mb-2">🗂️</div>Belum ada riwayat transaksi.</div>`;
+                    return;
+                }
+
+                let htmlString = '<div class="space-y-2">';
+                historyData.forEach(item => {
+                    const nom = parseFloat(item.nominal || 0);
+                    const isBayar = nom < 0;
+                    
+                    htmlString += `
+                    <div data-type="item" data-no="${item.no}" data-label="${encodeURIComponent(item.peminjam || '')}" data-amount="${formatRupiah(nom)}" class="history-row hold-target rise-in p-3.5 bg-[#131420] border border-[#232640] rounded-2xl flex justify-between items-center">
+                        <div>
+                            <div class="flex flex-col">
+                                <span class="text-sm font-bold text-slate-200">${item.peminjam || '-'}</span>
+                                <span class="text-[11px] text-slate-400">#${item.no} • ${item.tanggal} • <span class="${isBayar ? 'text-emerald-400' : 'text-accent'} font-medium">${item.via || '-'}</span></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="num font-bold text-sm ${isBayar ? 'text-emerald-400' : 'text-accent'} text-right w-24">
+                                ${formatRupiah(nom)}
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                htmlString += '</div>';
+                container.innerHTML = htmlString;
+            }
+        }
+
+        function safeId(nama) {
+            return nama.replace(/[^a-zA-Z0-9]/g, '_') || 'x';
+        }
+
+        function toggleGroup(nama) {
+            const key = safeId(nama);
+            const body = document.getElementById('body-' + key);
+            const chev = document.getElementById('chev-' + key);
+            if (!body) return;
+
+            if (expandedGroups.has(nama)) {
+                expandedGroups.delete(nama);
+                body.classList.remove('open');
+                if (chev) chev.classList.remove('open');
+            } else {
+                expandedGroups.add(nama);
+                body.classList.add('open');
+                if (chev) chev.classList.add('open');
+            }
+        }
+
+        function handleSubmit(e) {
+            e.preventDefault();
+            const tgl = document.getElementById('tanggal').value;
+            const peminjam = document.getElementById('peminjam').value.toUpperCase().trim();
+            const via = document.getElementById('via').value.trim();
+            
+            let valStr = document.getElementById('nominal').value.trim();
+            let isNegative = valStr.startsWith('-');
+            let cleanVal = valStr.replace(/\D/g, '');
+            let rawNominal = isNegative ? '-' + cleanVal : cleanVal;
+            const nomNum = parseFloat(rawNominal || 0);
+
+            const newItem = {
+                no: (globalData.length > 0 ? Math.max(...globalData.map(i => i.no)) : 0) + 1,
+                tanggal: tgl,
+                peminjam: peminjam,
+                via: via,
+                nominal: nomNum
+            };
+
+            globalData.push(newItem);
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(globalData));
+            
+            if(activeTab === 'riwayat' && nomNum > 0) switchTab('aktif'); 
+            else renderData();
+
+            showToast("Tersimpan", "success");
+
+            document.getElementById('peminjam').value = '';
+            document.getElementById('via').value = '';
+            document.getElementById('nominal').value = '';
+
+            const encTgl = encodeURIComponent(tgl);
+            const encPeminjam = encodeURIComponent(peminjam);
+            const encVia = encodeURIComponent(via);
+            const encNom = encodeURIComponent(rawNominal);
+
+            // Fetch add dibikin no-cors lagi
+            fetch(`${API_URL}?action=add&tanggal=${encTgl}&peminjam=${encPeminjam}&via=${encVia}&nominal=${encNom}`, { mode: 'no-cors' })
+                .then(() => setTimeout(loadData, 500))
+                .catch(err => {
+                    console.error("Error Add:", err);
+                    showErrorBanner(`Gagal sinkron ke server: ${err.message}. Data ini baru tersimpan di perangkat ini.`);
+                });
+        }
+
+        // ===== HAPUS: tahan lama pada baris -> muncul popup konfirmasi =====
+        const HOLD_MS = 700;
+        let holdTimer = null;
+        let holdEl = null;
+        let holdJustFired = false;
+        document.documentElement.style.setProperty('--hold-ms', HOLD_MS + 'ms');
+
+        function cancelHold() {
+            if (holdTimer) clearTimeout(holdTimer);
+            holdTimer = null;
+            if (holdEl) holdEl.classList.remove('holding');
+            holdEl = null;
+        }
+
+        document.addEventListener('pointerdown', function(e) {
+            const el = e.target.closest('.hold-target');
+            if (!el) return;
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            cancelHold();
+            holdEl = el;
+            el.classList.add('holding');
+            holdTimer = setTimeout(() => {
+                const target = holdEl;
+                holdJustFired = true;
+                setTimeout(() => { holdJustFired = false; }, 500);
+                cancelHold();
+                if (navigator.vibrate) navigator.vibrate(40);
+                openDeleteFromEl(target);
+            }, HOLD_MS);
+        });
+        ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, cancelHold));
+        document.addEventListener('pointerout', function(e) {
+            if (holdEl && !holdEl.contains(e.relatedTarget)) cancelHold();
+        });
+        document.addEventListener('contextmenu', function(e) {
+            if (e.target.closest('.hold-target')) e.preventDefault();
+        });
+        // Setelah tahan lama, klik lanjutan (mis. buka/tutup grup) diabaikan
+        document.addEventListener('click', function(e) {
+            if (holdJustFired && e.target.closest('.hold-target')) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+        }, true);
+
+        function openDeleteFromEl(el) {
+            if (!el) return;
+            if (el.dataset.type === 'person') {
+                openDeleteModal(null, decodeURIComponent(el.dataset.name), null, true);
+            } else {
+                openDeleteModal(parseInt(el.dataset.no, 10), decodeURIComponent(el.dataset.label || ''), el.dataset.amount, false);
+            }
+        }
+
+        function openDeleteModal(no, peminjam, nominalStr, isDeleteAll) {
+            deleteTargetNo = no;
+            deleteTargetPerson = isDeleteAll ? peminjam : null;
+
+            document.getElementById('deleteModalText').innerText = isDeleteAll
+                ? `Yakin mau hapus/lunasin SEMUA catatan atas nama ${peminjam}? Data bakal terhapus permanen.`
+                : `Hapus catatan pinjaman ${peminjam} sebesar ${nominalStr}?`;
+
+            document.getElementById('deleteModal').classList.add('show');
+            setTimeout(() => document.getElementById('confirmDeleteBtn').focus(), 80);
+        }
+
+        function closeDeleteModal() {
+            deleteTargetNo = null;
+            deleteTargetPerson = null;
+            document.getElementById('deleteModal').classList.remove('show');
+        }
+
+        window.addEventListener('keydown', function(e) {
+            if (!document.getElementById('deleteModal').classList.contains('show')) return;
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('confirmDeleteBtn').click();
+            } else if (e.key === 'Escape') {
+                closeDeleteModal();
+            }
+        });
+
+        document.getElementById('confirmDeleteBtn').onclick = function() {
+            const targetNo = deleteTargetNo;
+            const targetPerson = deleteTargetPerson;
+            closeDeleteModal();
+            performDelete(targetNo, targetPerson);
+        };
+
+        async function performDelete(targetNo, targetPerson) {
+            if (targetPerson) {
+                globalData = globalData.filter(item =>
+                    (item.peminjam || '').toUpperCase().trim() !== targetPerson
+                );
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(globalData));
+                renderData();
+                showToast(`Data ${targetPerson} terhapus`, "success");
+
+                try {
+                    await fetch(`${API_URL}?action=deletePerson&person=${encodeURIComponent(targetPerson)}`, { mode: 'no-cors' });
+                } catch(err) {
+                    console.error("Error Delete Person:", err);
+                    showErrorBanner(`Gagal sinkron hapus ke server: ${err.message}.`);
+                }
+
+                setTimeout(loadData, 1000);
+
+            } else if (targetNo !== null && !isNaN(targetNo)) {
+                globalData = globalData.filter(item => item.no !== targetNo);
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(globalData));
+                renderData();
+                showToast("Terhapus", "success");
+
+                try {
+                    await fetch(`${API_URL}?action=delete&no=${encodeURIComponent(targetNo)}`, { mode: 'no-cors' });
+                } catch(err) {
+                    console.error("Error Delete:", err);
+                    showErrorBanner(`Gagal sinkron hapus ke server: ${err.message}.`);
+                }
+
+                setTimeout(loadData, 500);
+            }
+        }
+    </script>
+</body>
+</html>
