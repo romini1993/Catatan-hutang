@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hutang-pwa-v1';
+const CACHE_NAME = 'hutang-pwa-v1124';
 const urlsToCache = [
   './',
   './index.html',
